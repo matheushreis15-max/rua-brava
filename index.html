@@ -8151,6 +8151,7 @@ function onChat(msg) {
 /* ================= comandos de chat: começam com "/" e só quem digitou vê ================= */
 let adminOn = false;
 me.infinito = load('rb-inf') === '1';
+me.admin1Usado = load('rb-admin1') === '1';
 const avisoLocal = t => addChat(null, t, null);
 const COMANDOS_ADMIN = {
   '/vida': ['enche a vida', () => { me.hp = 100; return 'Vida cheia.'; }],
@@ -8182,8 +8183,9 @@ function comandoChat(txt) {
   }
   if (cmd === '/admin1') {
     if (me.infinito && !me.infinitoAte) { avisoLocal('Você já está com dinheiro infinito.'); return; }
+    if (me.admin1Usado && !me.infinitoAte) { avisoLocal('Esse código já foi usado. Ele só funciona uma vez.'); return; }
     if (me.infinitoAte) { avisoLocal(`O dinheiro infinito já está ligado: faltam ${Math.ceil((me.infinitoAte - Date.now()) / 1000)} s.`); return; }
-    me.cashReal = Math.round(me.cash); me.infinito = true; me.infinitoAte = Date.now() + 60000; me.cash = 999999999;
+    me.cashReal = Math.round(me.cash); me.infinito = true; me.infinitoAte = Date.now() + 60000; me.cash = 999999999; me.admin1Usado = true; store('rb-admin1', '1'); saveSoon();
     sfxCash(); avisoLocal('💰 Dinheiro infinito por 1 minuto! Aproveite para comprar.'); toast('💰 Dinheiro infinito por 1 minuto!', 2.5);
     return;
   }
@@ -8297,7 +8299,7 @@ function bindRoom() {
 /* ================= progresso salvo e ranking ================= */
 let rankOn = false, rankRows = [], rankMap = new Map(), saveTimer = 0, saving = false, saveAgain = false;
 function progressData() {
-  return { grana: granaVisivel(), armas: me.owned.slice(), carros: me.ownedCars.slice(), coresCarros: me.ownedCarColors.slice(), upgradesCarros: me.carUpgrades, casas: me.casas.slice(), casaR: me.casaR, corrida: me.bestRace, abates: me.kills, quedas: me.deaths, visual: visCod(me.vis), atualizado: Date.now() };
+  return { grana: granaVisivel(), armas: me.owned.slice(), carros: me.ownedCars.slice(), coresCarros: me.ownedCarColors.slice(), upgradesCarros: me.carUpgrades, casas: me.casas.slice(), casaR: me.casaR, admin1: me.admin1Usado ? 1 : 0, corrida: me.bestRace, abates: me.kills, quedas: me.deaths, visual: visCod(me.vis), atualizado: Date.now() };
 }
 // a tunagem vale para todos os veículos que você tem: junta o melhor de cada um
 function igualarTunagem() {
@@ -8324,6 +8326,7 @@ function applyProgress(p) {
   if (fin(p.abates)) me.kills = p.abates | 0;
   if (fin(p.quedas)) me.deaths = p.quedas | 0;
   if (typeof p.visual === 'string') me.vis = visDec(p.visual);
+  if (p.admin1 === 1) { me.admin1Usado = true; store('rb-admin1', '1'); }
   if (Array.isArray(p.casas)) me.casas = [...new Set(p.casas.filter(id => typeof id === 'string' && CASAS_POR_ID.has(id)))];
   if (typeof p.casaR === 'string' && me.casas.includes(p.casaR)) me.casaR = p.casaR; else if (!me.casas.includes(me.casaR)) me.casaR = me.casas[0] || null;
   atualizarCasas();
