@@ -4387,7 +4387,7 @@ self.onmessage = (e) => {
   return { get pronto() { return pronto; }, get triangulos() { return triangulos; }, gerar, criar, pose, colocar, descartar, arma, visual };
 })();
 
-function nameTag(text, color, stars = 0) {
+function nameTag(text, color, stars = 0, adm = false) {
   const c = document.createElement('canvas'); c.width = 256; c.height = 96;
   const g = c.getContext('2d');
   g.font = '700 32px "Barlow Semi Condensed", Arial, sans-serif';
@@ -4396,7 +4396,9 @@ function nameTag(text, color, stars = 0) {
   if (g.roundRect) { g.beginPath(); g.roundRect(x0, 38, w, 44, 10); g.fill(); } else g.fillRect(x0, 38, w, 44);
   g.fillStyle = color; g.beginPath(); g.arc(x0 + 16, 60, 6, 0, TAU); g.fill();
   g.fillStyle = '#ffffff'; g.textBaseline = 'middle'; g.fillText(text, x0 + 30, 62);
-  if (stars > 0) { g.fillStyle = '#ffd23d'; g.font = '700 30px Arial, sans-serif'; g.textAlign = 'center'; g.fillText('★'.repeat(stars), 128, 20); }
+  if (adm) { g.strokeStyle = '#ffd23d'; g.lineWidth = 3; g.strokeRect(x0 + 1.5, 39.5, w - 3, 41); }
+  if (adm) { g.fillStyle = '#ffd23d'; g.font = '800 26px Arial, sans-serif'; g.textAlign = 'center'; g.fillText('👑 ADMIN' + (stars > 0 ? ' ' + '★'.repeat(stars) : ''), 128, 20); }
+  else if (stars > 0) { g.fillStyle = '#ffd23d'; g.font = '700 30px Arial, sans-serif'; g.textAlign = 'center'; g.fillText('★'.repeat(stars), 128, 20); }
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
   s.scale.set(2.4, 0.9, 1); s.raycast = () => {};
@@ -5573,7 +5575,7 @@ const cashGeo = mergeGeos([{ g: box(0.32, 0.06, 0.16), c: col(0x3c8f4a) }, { g: 
 const cashMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, emissive: 0x1f5a28, emissiveIntensity: 0.6 });
 const pickups = [];
 function dropCash(x, z, amount) {
-  if (pickups.length > 30) { const o = pickups.shift(); o.mesh.removeFromParent(); }
+  if (pickups.length > 70) { const o = pickups.shift(); o.mesh.removeFromParent(); }
   const m = new THREE.Mesh(cashGeo, cashMat); m.position.set(x, groundY(x, z) + 0.3, z); m.raycast = () => {}; scene.add(m);
   pickups.push({ mesh: m, x, z, amount, t: 0 });
 }
@@ -5755,8 +5757,8 @@ function updateRunners(dt) {
 function updatePickups(dt) {
   for (let i = pickups.length - 1; i >= 0; i--) {
     const k = pickups[i]; k.t += dt;
-    k.mesh.rotation.y += dt * 3; k.mesh.position.y = groundY(k.x, k.z) + 0.3 + Math.sin(k.t * 4) * 0.08;
-    if (!me.dead && Math.hypot(me.pos.x - k.x, me.pos.z - k.z) < 1.4) {
+    k.mesh.rotation.y += dt * 3; k.mesh.position.y = groundY(k.x, k.z) + 0.3 + (k.cai || 0) + Math.sin(k.t * 4) * 0.08;
+    if (!me.dead && !(k.cai > 1.5) && Math.hypot(me.pos.x - k.x, me.pos.z - k.z) < 1.4) {
       me.cash += k.amount; showGain('+' + fmtMoney(k.amount)); sfxCash(); k.mesh.removeFromParent(); pickups.splice(i, 1); saveSoon(); continue;
     }
     if (k.t > 40) { k.mesh.removeFromParent(); pickups.splice(i, 1); }
@@ -7954,7 +7956,7 @@ function presenceTick() {
     car: c ? (c.shared ? c.id : -2) : -1, seat: c ? (me.carSeat || 0) : -1, host: (c && me.carHost) ? me.carHost : null, ct: c ? c.type : 0, cc: c ? c.color : 0, cp: c && c.police ? 1 : 0,
     cx: c ? r2(c.x) : 0, cy: c ? r2(c.y) : 0, cz: c ? r2(c.z) : 0, ch: c ? r2(c.h) : 0, cs: c ? r2(c.speed) : 0, st: c ? r2(c.steer) : 0, cb: c && c.burnt ? 1 : 0, cpt: c ? r2(c.pitch || 0) : 0, crl: c ? r2(c.roll || 0) : 0, cg: c ? r2(c.grau || 0) : 0,
     pk: [...myParked.values()].slice(0, 20),
-    vi: visCod(me.vis),
+    vi: visCod(me.vis), adm: me.chefe && me.coroa ? 1 : 0, ev: meuEv(),
   };
   nr.presence(p).catch(() => {});
 }
@@ -7977,11 +7979,11 @@ function remoteMeta(Rm, pr) {
   } else if (ci !== Rm.color) recolorShirt(Rm.ch, COLORS[ci]);
   Rm.name = name; Rm.color = ci;
   aplicarVisual(Rm.ch, pr.vi);
-  Rm.stars = Number.isInteger(pr.w) ? clamp(pr.w, 0, 5) : 0;
-  const key = name + ci + Rm.stars;
+  Rm.stars = Number.isInteger(pr.w) ? clamp(pr.w, 0, 5) : 0; Rm.adm = pr.adm === 1; Rm.ev = Number.isInteger(pr.ev) ? pr.ev & 3 : 0;
+  const key = name + ci + Rm.stars + (Rm.adm ? 'A' : '');
   if (key !== Rm.tagKey) {
     if (Rm.tag) { scene.remove(Rm.tag); Rm.tag.material.map.dispose(); Rm.tag.material.dispose(); }
-    Rm.tag = nameTag(name, COLOR_CSS[ci], Rm.stars); scene.add(Rm.tag); Rm.tagKey = key;
+    Rm.tag = nameTag(name, COLOR_CSS[ci], Rm.stars, Rm.adm); scene.add(Rm.tag); Rm.tagKey = key;
   }
   Rm.dead = pr.m === 1; Rm.air = pr.a === 1; Rm.punch = pr.pu === 1 ? 1 : 0;
   Rm.k = num(pr.k, 0, 1e6, 0) | 0; Rm.d = num(pr.d, 0, 1e6, 0) | 0; Rm.g = num(pr.g, 0, 1e9, 0) | 0;
@@ -8028,7 +8030,7 @@ function remoteMeta(Rm, pr) {
   }
 }
 function snap(pr) {
-  return { x: num(pr.x, -LIM, LIMZ, 0), y: num(pr.y, 0, 12, 0), z: num(pr.z, -LIM, LIMZ, 0), r: num(pr.r, -1e4, 1e4, 0), p: num(pr.p, -1.5, 1.5, 0), s: num(pr.s, 0, 12, 0),
+  return { x: num(pr.x, -LIM, LIMZ, 0), y: num(pr.y, 0, 320, 0), z: num(pr.z, -LIM, LIMZ, 0), r: num(pr.r, -1e4, 1e4, 0), p: num(pr.p, -1.5, 1.5, 0), s: num(pr.s, 0, 12, 0),
     cx: num(pr.cx, -LIM, LIMZ, 0), cy: num(pr.cy, 0, 250, 0), cz: num(pr.cz, -LIM, LIMZ, 0), ch: num(pr.ch, -1e4, 1e4, 0), cs: num(pr.cs, -20, 120, 0), st: num(pr.st, -1, 1, 0), cpt: num(pr.cpt, -2, 2, 0), crl: num(pr.crl, -1, 1, 0), cg: num(pr.cg, 0, 1.4, 0) };
 }
 function sampleRemote(Rm) {
@@ -8172,12 +8174,13 @@ const COMANDOS_ADMIN = {
 function listaComandos() {
   avisoLocal('🛠️ Admin liberado (só você vê): /vida /colete /armas /limpar');
   avisoLocal('/carro /gasolina /conserta /semdinheiro');
+  if (me.chefe) avisoLocal('👑 Admin chefe: /chuva /pararchuva /meteoros /pararmeteoro /parar /trazer /voar /flash /coroa');
 }
 function comandoChat(txt) {
   const cmd = txt.trim().toLowerCase().split(/\s+/)[0];
   if (cmd === '/admin1204') {
     if (!me.infinito) me.cashReal = Math.round(me.cash);
-    adminOn = true; me.infinito = true; me.infinitoAte = null; store('rb-inf', '1'); me.cash = 999999999; saveSoon();
+    adminOn = true; me.infinito = true; me.infinitoAte = null; store('rb-inf', '1'); me.chefe = true; store('rb-chefe', '1'); me.cash = 999999999; saveSoon();
     sfxCash(); avisoLocal('💰 Senha certa! Dinheiro infinito ligado. Digite /admin para ver os comandos.');
     return;
   }
@@ -8192,9 +8195,122 @@ function comandoChat(txt) {
   if (cmd === '/admin') { adminOn = true; listaComandos(); return; }
   const c = COMANDOS_ADMIN[cmd];
   if (!c) { avisoLocal(`Comando ${cmd} não existe. Digite /admin para ver a lista.`); return; }
-  if (!adminOn) { avisoLocal('Digite /admin primeiro para liberar os comandos.'); return; }
+  if (!adminOn && !me.chefe) { avisoLocal('Digite /admin primeiro para liberar os comandos.'); return; }
   avisoLocal(c[1]());
 }
+/* ================= admin abuse: eventos para a sala inteira e poderes do admin chefe ================= */
+me.chefe = load('rb-chefe') === '1' || load('rb-inf') === '1';
+me.coroa = load('rb-coroa') !== '0';
+me.voando = false; me.flash = false;
+let meteoroAcc = 0, chuvaAcc = 0, evAntes = 0;
+me.evChuva = false; me.evMeteoros = false;
+const meteoros = [];
+const meteoroGeo = new THREE.IcosahedronGeometry(1.1, 1);
+const meteoroMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 1.3, 0.35) });
+const alertaGeo = new THREE.RingGeometry(3.2, 4.2, 32).rotateX(-Math.PI / 2);
+const precisaChefe = () => me.chefe ? null : 'Esse comando é só do admin chefe (senha /admin1204).';
+function onAdmin(msg) {
+  if (msg.sameTab) return;
+  const d = msg.data; if (!d || typeof d.e !== 'string') return;
+  const quem = nameOf(msg.peer) || 'O admin';
+  if (d.e === 'trazer' && fin(d.x) && fin(d.z)) serPuxado(quem, d.x, d.z);
+}
+// ---------- eventos ligados pelo admin: ficam ativos até ele mandar parar (ou sair da sala) ----------
+const meuEv = () => me.chefe ? (me.evChuva ? 1 : 0) | (me.evMeteoros ? 2 : 0) : 0;
+function eventosAtivos() {
+  let ev = meuEv(), quem = { 1: 'Você', 2: 'Você' };
+  for (const Rm of remotes.values()) { const e = Rm.ev | 0; for (const bit of [1, 2]) if (e & bit && !(ev & bit)) { ev |= bit; quem[bit] = Rm.name || 'O admin'; } }
+  return { ev, quem };
+}
+function soltarMaco() {
+  const a = Math.random() * TAU, r = 4 + Math.random() * 26;
+  const p = { x: me.pos.x + Math.cos(a) * r, z: me.pos.z + Math.sin(a) * r };
+  collideCircle(p, 0.8);
+  dropCash(p.x, p.z, 50 + Math.floor(Math.random() * 6) * 50);
+  pickups[pickups.length - 1].cai = 30 + Math.random() * 10;
+}
+function soltarMeteoro() {
+  const perto = Math.random() < 0.3, a = Math.random() * TAU, r = perto ? 6 + Math.random() * 12 : 15 + Math.random() * 60;
+  const tx = me.pos.x + Math.cos(a) * r, tz = me.pos.z + Math.sin(a) * r, gy = groundY(tx, tz);
+  const da = Math.random() * TAU;
+  const m = new THREE.Mesh(meteoroGeo, meteoroMat); m.raycast = () => {}; scene.add(m);
+  const anel = new THREE.Mesh(alertaGeo, new THREE.MeshBasicMaterial({ color: 0xff2a1a, transparent: true, opacity: 0.6, depthWrite: false })); anel.position.set(tx, gy + 0.08, tz); anel.raycast = () => {}; scene.add(anel);
+  meteoros.push({ m, anel, t: 0, dur: 2.4, sx: tx + Math.cos(da) * 45, sy: gy + 110, sz: tz + Math.sin(da) * 45, tx, ty: gy, tz });
+}
+// ---------- puxar todo mundo ----------
+function serPuxado(quem, x, z) {
+  if (me.dead) return;
+  if (me.car) exitCar();
+  const a = Math.random() * TAU, p = { x: x + Math.cos(a) * (3 + Math.random() * 4), z: z + Math.sin(a) * (3 + Math.random() * 4) };
+  collideCircle(p, 0.42);
+  me.pos.set(p.x, groundY(p.x, p.z), p.z); me.vx = me.vz = me.vy = 0; me.voando = false;
+  toast(`👑 ${quem} puxou você para perto dele!`, 3); sfxBeep(660, 0.12, 0.08);
+}
+// ---------- voar ----------
+const _eVoo = new THREE.Euler(0, 0, 0, 'YXZ');
+function voarAdmin(dt) {
+  const { f, s, mag, run } = moveInput();
+  const sp = (run || me.flash ? 42 : 22) * mag, cp = Math.cos(me.pitch);
+  let mx = (-Math.sin(me.yaw) * f * cp + Math.cos(me.yaw) * s), mz = (-Math.cos(me.yaw) * f * cp - Math.sin(me.yaw) * s), my = Math.sin(me.pitch) * f;
+  const len = Math.hypot(mx, my, mz); if (len > 0) { mx /= len; my /= len; mz /= len; }
+  let vy = my * sp;
+  if (down('Space') || touch.jump) vy = 14; else if (down('KeyC', 'ControlLeft', 'ControlRight')) vy = -14;
+  const k = Math.min(1, dt * 6);
+  me.vx = lerp(me.vx, mx * sp, k); me.vz = lerp(me.vz, mz * sp, k); me.vy = lerp(me.vy, vy, k);
+  const p = { x: clamp(me.pos.x + me.vx * dt, -LIM, LIM), z: clamp(me.pos.z + me.vz * dt, -LIM, LIMZ) };
+  let y = clamp(me.pos.y + me.vy * dt, 0, 300);
+  const r = predioEm(p.x, p.z, 0.45);
+  if (r && y < 0.25 + r.h) { if (me.pos.y >= 0.25 + r.h - 0.4) y = 0.25 + r.h; else { p.x = me.pos.x; p.z = me.pos.z; } }
+  y = Math.max(y, groundY(p.x, p.z));
+  me.pos.set(p.x, y, p.z); me.grounded = false;
+  me.animSpeed = 0;
+}
+function inclinarVoo() {
+  const v = Math.hypot(me.vx, me.vz), alvo = -clamp(v / 22, 0, 1) * 1.25;
+  meChar.inclVoo = lerp(meChar.inclVoo || 0, alvo, 0.15);
+  _eVoo.set(meChar.inclVoo, me.yaw, 0); meChar.root.quaternion.setFromEuler(_eVoo);
+}
+// chão do telhado: quem pousa num prédio voando fica em cima dele
+function chaoComTeto(x, z, y) { const r = predioEm(x, z, 0.1); const t = r ? 0.25 + r.h : -1e9; const g = groundY(x, z); return y >= t - 0.5 && t > g ? t : g; }
+// ---------- laço ----------
+function tickAdmin(dt) {
+  const { ev, quem } = eventosAtivos();
+  if ((ev & 1) && !(evAntes & 1)) { bigMessage('💸 CHUVA DE DINHEIRO', `${quem[1]} está fazendo chover dinheiro! Pegue os maços`); sfxCash(); }
+  if (!(ev & 1) && (evAntes & 1)) toast('A chuva de dinheiro parou', 2.5);
+  if ((ev & 2) && !(evAntes & 2)) { bigMessage('☄️ CHUVA DE METEOROS', `${quem[2]} chamou meteoros! Fuja dos círculos vermelhos`); sfxBeep(220, 0.5, 0.12); }
+  if (!(ev & 2) && (evAntes & 2)) toast('Os meteoros pararam', 2.5);
+  evAntes = ev;
+  if (ev & 1) { chuvaAcc += dt; while (chuvaAcc > 0.5) { chuvaAcc -= 0.5; soltarMaco(); } }
+  for (const k of pickups) if (k.cai > 0) k.cai = Math.max(0, k.cai - dt * 16);
+  if (ev & 2) { meteoroAcc += dt; while (meteoroAcc > 0.75) { meteoroAcc -= 0.75; soltarMeteoro(); } }
+  for (let i = meteoros.length - 1; i >= 0; i--) {
+    const o = meteoros[i]; o.t += dt; const u = Math.min(1, o.t / o.dur);
+    const x = lerp(o.sx, o.tx, u), y = lerp(o.sy, o.ty, u * u), z = lerp(o.sz, o.tz, u);
+    o.m.position.set(x, y, z); o.m.rotation.x += dt * 5; o.m.rotation.y += dt * 3;
+    o.anel.material.opacity = 0.35 + 0.35 * Math.sin(o.t * 14);
+    if (Math.random() < 0.9) emitPart('fire', x, y, z, rnd(-1, 1), rnd(1, 3), rnd(-1, 1), rnd(1.6, 2.6), rnd(0.25, 0.5));
+    if (u >= 1) {
+      o.m.removeFromParent(); o.anel.removeFromParent(); o.anel.material.dispose(); meteoros.splice(i, 1);
+      if (me.chefe) me.invul = Math.max(me.invul, 0.05);
+      explosao(o.tx, o.ty + 0.6, o.tz, null, 9, true);
+    }
+  }
+  if (me.voando && (me.dead || me.car)) me.voando = false;
+}
+// ---------- comandos ----------
+Object.assign(COMANDOS_ADMIN, {
+  '/chuva': ['liga a chuva de dinheiro da sala', () => precisaChefe() || (me.evChuva ? 'A chuva de dinheiro já está ligada. Para parar: /pararchuva' : (me.evChuva = true, 'Chuva de dinheiro ligada para todo mundo! Para parar: /pararchuva'))],
+  '/pararchuva': ['para a chuva de dinheiro', () => precisaChefe() || (me.evChuva ? (me.evChuva = false, 'Chuva de dinheiro parada.') : 'A chuva de dinheiro já estava parada.')],
+  '/meteoros': ['liga a chuva de meteoros da sala', () => precisaChefe() || (me.evMeteoros ? 'Os meteoros já estão caindo. Para parar: /pararmeteoro' : (me.evMeteoros = true, 'Meteoros ligados! Você não leva dano. Para parar: /pararmeteoro'))],
+  '/pararmeteoro': ['para a chuva de meteoros', () => precisaChefe() || (me.evMeteoros ? (me.evMeteoros = false, 'Meteoros parados.') : 'Os meteoros já estavam parados.')],
+  '/parar': ['para a chuva de dinheiro e os meteoros', () => precisaChefe() || (me.evChuva = me.evMeteoros = false, 'Tudo parado para todo mundo.')],
+  '/trazer': ['puxa todos os jogadores para perto de você', () => precisaChefe() || (send('admin', { e: 'trazer', x: r2(me.car ? me.car.x : me.pos.x), z: r2(me.car ? me.car.z : me.pos.z) }), 'Todos os jogadores foram puxados para você.')],
+  '/voar': ['liga ou desliga o voo', () => { const e = precisaChefe(); if (e) return e; if (me.car) return 'Saia do veículo para voar.'; me.voando = !me.voando; me.vy = 0; return me.voando ? (touchMode ? 'Voando! Joystick anda, olhe para cima ou para baixo, botão Pular sobe.' : 'Voando! WASD anda (na direção que você olha), Espaço sobe, C desce, Shift acelera.') : 'Voo desligado.'; }],
+  '/flash': ['super velocidade e super pulo', () => { const e = precisaChefe(); if (e) return e; me.flash = !me.flash; return me.flash ? '⚡ Super velocidade e super pulo ligados.' : 'Velocidade normal.'; }],
+  '/coroa': ['mostra ou esconde a coroa de ADMIN', () => { const e = precisaChefe(); if (e) return e; me.coroa = !me.coroa; store('rb-coroa', me.coroa ? '1' : '0'); return me.coroa ? '👑 Coroa de ADMIN aparecendo para todos.' : 'Coroa escondida.'; }],
+});
+
+COMANDOS_ADMIN['/pararmeteoros'] = COMANDOS_ADMIN['/pararmeteoro'];
 // com dinheiro infinito, o placar e o ranking mostram só o dinheiro "de verdade" (ganho jogando)
 function granaVisivel() { return Math.round(me.infinito ? (me.cashReal || 0) : me.cash); }
 function tickInfinito() {
@@ -8292,7 +8408,7 @@ function sendChat(txt) {
 }
 function sendChatSys(txt) { addChat(null, txt, null); send('chat', { txt: cleanText(txt, 90), sys: 1 }); }
 function bindRoom() {
-  nr.on('tiro', onTiro); nr.on('atropelo', onAtropelo); nr.on('abate', onAbate); nr.on('carro', onCarro); nr.on('chat', onChat); nr.on('bomba', onBomba); nr.on('bandeira', onBandeira);
+  nr.on('tiro', onTiro); nr.on('atropelo', onAtropelo); nr.on('abate', onAbate); nr.on('carro', onCarro); nr.on('chat', onChat); nr.on('bomba', onBomba); nr.on('bandeira', onBandeira); nr.on('admin', onAdmin);
   nr.onConnection(c => { online = c; updateStatus(); }, () => { online = false; updateStatus(); });
 }
 
@@ -9055,14 +9171,15 @@ $('#missao-cancelar').addEventListener('click', () => { if (mission) failMission
 
 /* ================= física do jogador ================= */
 function updateOnFoot(dt) {
+  if (me.voando) { voarAdmin(dt); return; }
   const { f, s, mag, run } = moveInput();
-  const sp = (run ? 9 : 5) * mag;
+  const sp = (run ? 9 : 5) * mag * (me.flash ? 3.2 : 1);
   let mx = -Math.sin(me.yaw) * f + Math.cos(me.yaw) * s, mz = -Math.cos(me.yaw) * f - Math.sin(me.yaw) * s;
   const len = Math.hypot(mx, mz); if (len > 0) { mx /= len; mz /= len; }
   const k = Math.min(1, dt * 12);
   me.vx = lerp(me.vx, mx * sp, k); me.vz = lerp(me.vz, mz * sp, k);
   const p = { x: me.pos.x + me.vx * dt, z: me.pos.z + me.vz * dt };
-  collideCircle(p, 0.42);
+  if (me.pos.y - groundY(me.pos.x, me.pos.z) < 1.5) collideCircle(p, 0.42);
   if (rampBlocks(p.x, p.z, me.pos.y)) { p.x = me.pos.x; p.z = me.pos.z; }
   for (const c of ALL_CARS) {
     if (Math.abs(c.x - p.x) > 5 || Math.abs(c.z - p.z) > 5 || c.y > me.pos.y + 1.5) continue;
@@ -9098,10 +9215,10 @@ function updateOnFoot(dt) {
       }
     }
   }
-  if ((down('Space') || touch.jump) && me.grounded) { me.vy = 6.5; me.grounded = false; }
+  if ((down('Space') || touch.jump) && me.grounded) { me.vy = me.flash ? 17 : 6.5; me.grounded = false; }
   me.vy -= 20 * dt;
   let y = me.pos.y + me.vy * dt;
-  const gy = groundY(p.x, p.z);
+  const gy = chaoComTeto(p.x, p.z, me.pos.y);
   if (y <= gy) { y = gy; me.vy = 0; me.grounded = true; } else if (me.grounded && y - gy < 0.35) { y = gy; me.vy = 0; } else me.grounded = false;
   me.pos.set(p.x, y, p.z);
   me.animSpeed = Math.hypot(me.vx, me.vz);
@@ -9451,7 +9568,7 @@ function frame(now) {
     if (shopOpen && shopMarker && Math.hypot(shopMarker.x - me.pos.x, shopMarker.z - me.pos.z) > 4) closeShop();
     syncRemotes(dt);
     presAcc += dt; if (presAcc >= 0.1) { presAcc = 0; presenceTick(); }
-    updatePolice(dt); updateMission(dt); updatePickups(dt); tickAbastecer(dt); tickBombas(dt); tickCasas(dt);
+    updatePolice(dt); updateMission(dt); updatePickups(dt); tickAbastecer(dt); tickBombas(dt); tickCasas(dt); tickAdmin(dt);
     if (vitrineOpen && vitrineMk && Math.hypot(vitrineMk.x - me.pos.x, vitrineMk.z - me.pos.z) > 4) fecharVitrine();
     tickSave(dt); audioFrame(dt);
   }
@@ -9467,7 +9584,7 @@ function frame(now) {
       const isPax = (me.carSeat === 1);
       sentarVeiculo(meChar, me.car, me.carSeat || 0, dt);
     }
-    else { poseChar(meChar, { speed: me.animSpeed, aim: me.dead || emProvador() ? null : me.pitch, dead: me.dead, air: !me.grounded, weapon: me.weapon, punch: me.punchT > 0 ? Math.sin((1 - me.punchT / 0.32) * Math.PI) : 0, onStep: sfxStep }, dt); placeChar(meChar, me.pos.x, me.pos.y, me.pos.z, me.yaw); }
+    else { poseChar(meChar, { speed: me.animSpeed, aim: me.dead || emProvador() ? null : me.pitch, dead: me.dead, air: !me.grounded, weapon: me.weapon, punch: me.punchT > 0 ? Math.sin((1 - me.punchT / 0.32) * Math.PI) : 0, onStep: sfxStep }, dt); placeChar(meChar, me.pos.x, me.pos.y, me.pos.z, me.yaw); if (me.voando) inclinarVoo(); }
     for (const Rm of remotes.values()) placeRemote(Rm, dt);
   }
   updatePeds(dt); updateEffects(dt); updateParticles(dt);
