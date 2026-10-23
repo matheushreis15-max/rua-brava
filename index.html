@@ -8166,7 +8166,7 @@ const COMANDOS_ADMIN = {
     c.fuel = 100; localCars.push(c); ALL_CARS.push(c);
     return 'Esportivo entregue na sua frente.';
   }],
-  '/semdinheiro': ['desliga o dinheiro infinito', () => { me.infinito = false; store('rb-inf', '0'); me.cash = me.cashReal || 0; saveSoon(); return 'Dinheiro infinito desligado.'; }],
+  '/semdinheiro': ['desliga o dinheiro infinito', () => { me.infinito = false; me.infinitoAte = null; store('rb-inf', '0'); me.cash = me.cashReal || 0; saveSoon(); return 'Dinheiro infinito desligado.'; }],
 };
 function listaComandos() {
   avisoLocal('🛠️ Admin liberado (só você vê): /vida /colete /armas /limpar');
@@ -8176,8 +8176,15 @@ function comandoChat(txt) {
   const cmd = txt.trim().toLowerCase().split(/\s+/)[0];
   if (cmd === '/admin1204') {
     if (!me.infinito) me.cashReal = Math.round(me.cash);
-    adminOn = true; me.infinito = true; store('rb-inf', '1'); me.cash = 999999999; saveSoon();
+    adminOn = true; me.infinito = true; me.infinitoAte = null; store('rb-inf', '1'); me.cash = 999999999; saveSoon();
     sfxCash(); avisoLocal('💰 Senha certa! Dinheiro infinito ligado. Digite /admin para ver os comandos.');
+    return;
+  }
+  if (cmd === '/admin1') {
+    if (me.infinito && !me.infinitoAte) { avisoLocal('Você já está com dinheiro infinito.'); return; }
+    if (me.infinitoAte) { avisoLocal(`O dinheiro infinito já está ligado: faltam ${Math.ceil((me.infinitoAte - Date.now()) / 1000)} s.`); return; }
+    me.cashReal = Math.round(me.cash); me.infinito = true; me.infinitoAte = Date.now() + 60000; me.cash = 999999999;
+    sfxCash(); avisoLocal('💰 Dinheiro infinito por 1 minuto! Aproveite para comprar.'); toast('💰 Dinheiro infinito por 1 minuto!', 2.5);
     return;
   }
   if (cmd === '/admin') { adminOn = true; listaComandos(); return; }
@@ -8190,6 +8197,12 @@ function comandoChat(txt) {
 function granaVisivel() { return Math.round(me.infinito ? (me.cashReal || 0) : me.cash); }
 function tickInfinito() {
   if (!me.infinito) return;
+  if (me.infinitoAte && Date.now() >= me.infinitoAte) {
+    const d = me.cash - 999999999; if (d > 0 && d < 1e8) me.cashReal = (me.cashReal || 0) + d;
+    me.infinito = false; me.infinitoAte = null; me.cash = me.cashReal || 0; saveSoon();
+    avisoLocal('⏱️ Acabou o minuto de dinheiro infinito.'); toast('⏱️ Acabou o dinheiro infinito', 2.5);
+    return;
+  }
   if (me.cashReal == null) me.cashReal = me.cash >= 999999999 ? 0 : Math.round(me.cash);
   const d = me.cash - 999999999;
   if (d > 0 && d < 1e8) me.cashReal += d;
@@ -8605,7 +8618,7 @@ function interactInfo() {
 }
 function updateHUD(dt) {
   tickInfinito();
-  setText('#grana', me.infinito ? 'R$ ∞' : fmtMoney(me.cash));
+  setText('#grana', me.infinito ? (me.infinitoAte ? `R$ ∞ (${Math.max(0, Math.ceil((me.infinitoAte - Date.now()) / 1000))} s)` : 'R$ ∞') : fmtMoney(me.cash));
   const vb = $('#vida-barra'), hpw = Math.max(0, Math.round(me.hp)) + '%';
   if (vb.style.width !== hpw) { vb.style.width = hpw; vb.parentElement.setAttribute('aria-valuenow', String(Math.round(me.hp))); }
   const cb = $('#colete-barra'), arw = Math.round(me.armor) + '%';
